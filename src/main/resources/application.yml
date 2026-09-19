@@ -1,0 +1,29 @@
+spring:
+  config:
+    import: optional:file:./application-secret.yml
+  application:
+    name: personal-knowledge-agent
+  ai:
+    openai:
+      # Chat：DeepSeek（OpenAI 兼容接口，api-key 见 application-secret.yml）
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+      # Embedding：Ollama（OpenAI 兼容接口，base-url 不要带 /v1）
+      embedding:
+        base-url: http://localhost:11434
+        api-key: ollama
+        options:
+          model: nomic-embed-text
+
+# 对话双模式所用模型
+chat:
+  quick-model: deepseek-chat          # 快点回答我很急（流式对话模式）
+  think-model: deepseek-reasoner      # 容我思考片刻（深度思考）
+
+# 个人知识库配置
+knowledge:
+  raw-notes-dir: data/raw-notes
+  wiki-dir: data/wiki
+  skill-dir: skill                          # Skill 包目录（SKILL.md + references/），对话人设来源
