@@ -1,5 +1,6 @@
 package com.example.agent.service;
 
+import com.example.agent.vector.ClasspathDocuments;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -94,13 +95,14 @@ public class ChatService {
 
     /**
      * 读取 skill 包（SKILL.md + references/*.md）并组装系统提示。
+     * 优先工作目录 skill/（可本地编辑 + 热重载），读不到时回退 jar 内置资源。
      */
     private String buildSystemPrompt() {
-        List<Path> files = loadSkillFiles();
-        this.loadedSkillFiles = files.stream().map(p -> p.getFileName().toString()).toList();
+        List<ClasspathDocuments.Doc> docs = loadSkillDocs();
+        this.loadedSkillFiles = docs.stream().map(ClasspathDocuments.Doc::name).toList();
 
         StringBuilder sb = new StringBuilder(BASE_SYSTEM_PROMPT);
-        if (files.isEmpty()) {
+        if (docs.isEmpty()) {
             log.warn("未找到 skill 文件（{}），仅使用基础系统提示", skillDir);
             return sb.toString();
         }
@@ -110,37 +112,51 @@ public class ChatService {
         sb.append("自我介绍、立场与思路遵循 identity.md（别像念简历、别自夸）；\n");
         sb.append("判断\"该不该下结论、能说到什么程度\"时遵循 knowledge-source.md（没把握的领域不下肯定结论）。\n");
 
-        for (Path f : files) {
-            try {
-                sb.append("\n----- ").append(f.getFileName().toString()).append(" -----\n");
-                sb.append(Files.readString(f, StandardCharsets.UTF_8).trim()).append('\n');
-            } catch (IOException e) {
-                log.warn("读取 skill 文件失败: {}", f, e);
-            }
+        for (ClasspathDocuments.Doc d : docs) {
+            sb.append("\n----- ").append(d.name()).append(" -----\n");
+            sb.append(d.content().trim()).append('\n');
         }
         log.info("已加载 skill 文件: {}", loadedSkillFiles);
         return sb.toString();
     }
 
-    /** 收集 skill 文件：SKILL.md + references/*.md（只读 .md，忽略其它文件）。 */
-    private List<Path> loadSkillFiles() {
-        List<Path> files = new ArrayList<>();
+    /** 读取 skill 文档：工作目录优先，读不到回退 jar 内置资源。 */
+    private List<ClasspathDocuments.Doc> loadSkillDocs() {
+        List<ClasspathDocuments.Doc> docs = new ArrayList<>();
         Path skillMd = skillDir.resolve("SKILL.md");
         if (Files.isRegularFile(skillMd)) {
-            files.add(skillMd);
-        }
-        Path refs = skillDir.resolve("references");
-        if (Files.isDirectory(refs)) {
-            try (Stream<Path> s = Files.list(refs)) {
-                s.filter(Files::isRegularFile)
-                        .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".md"))
-                        .sorted()
-                        .forEach(files::add);
+            try {
+                docs.add(new ClasspathDocuments.Doc("SKILL.md", Files.readString(skillMd, StandardCharsets.UTF_8)));
+                Path refs = skillDir.resolve("references");
+                if (Files.isDirectory(refs)) {
+                    try (Stream<Path> s = Files.list(refs)) {
+                        s.filter(Files::isRegularFile)
+                                .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".md"))
+                                .sorted()
+                                .forEach(p -> {
+                                    try {
+                                        docs.add(new ClasspathDocuments.Doc(p.getFileName().toString(),
+                                                Files.readString(p, StandardCharsets.UTF_8)));
+                                    } catch (IOException e) {
+                                        log.warn("读取 skill 文件失败: {}", p, e);
+                                    }
+                                });
+                    }
+                }
+                return docs;
             } catch (IOException e) {
-                log.warn("读取 skill references 目录失败: {}", refs, e);
+                log.warn("读取工作目录 skill 失败，回退 jar 内置资源: {}", skillDir, e);
+                docs.clear();
             }
         }
-        return files;
+        // 回退：jar 内置资源
+        try {
+            docs.addAll(ClasspathDocuments.read("classpath*:skill/SKILL.md"));
+            docs.addAll(ClasspathDocuments.read("classpath*:skill/references/*.md"));
+        } catch (RuntimeException e) {
+            log.warn("读取 jar 内置 skill 资源失败: {}", e.getMessage());
+        }
+        return docs;
     }
 
     /**

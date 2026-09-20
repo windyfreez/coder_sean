@@ -13,7 +13,7 @@
 - MySQL（索引、事务、锁、MVCC、慢查询优化）、Redis、RabbitMQ
 - 项目实践：SwapU 云市集（高并发缓存、秒杀库存预扣减、AI 智能推荐、查询优化）、
   Coder Sean编程对话智能体（Skill、RAG向量数据库、Prompt提示词工程、Spring AI架构、对话模型常见功能例如对话记忆等功能）、
-FasterWork Agent（RAG向量数据库检索、MCP标准化Office四件套编辑接口交互）。
+FasterWork Agent（LangChain/LangGraph框架、RAG向量数据库检索、MCP标准化Office四件套编辑接口交互）。
 
 ## 三、学习中（只懂概念与架构、实践不足 → 不要下肯定结论）
 **AI 应用开发**：Spring AI、Prompt Engineering、RAG、向量数据库、MCP 等。

@@ -90,6 +90,23 @@
     -->
 
     <build>
+        <!-- 把 skill/ 与 data/ 一并打进 jar（作为 classpath 内置资源），
+             部署时无需再手动拷贝这两个目录；
+             运行时仍优先读工作目录，读不到才回退到 jar 内置资源 -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>skill</directory>
+                <targetPath>skill</targetPath>
+            </resource>
+            <resource>
+                <directory>data</directory>
+                <targetPath>data</targetPath>
+            </resource>
+        </resources>
+
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

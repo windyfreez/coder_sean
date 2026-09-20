@@ -378,17 +378,51 @@ npm run dev
 | 后端 API | http://localhost:8080 |
 | Ollama | http://localhost:11434 |
 
-### 部署说明
+### 部署说明（服务器 / jar）
+
+`skill/` 与 `data/` 会在打包时作为资源写入 jar，**服务器上不需要任何额外目录**，
+上传一个 jar 即可运行。
 
 ```bash
-# 前端打包
-cd frontend
-npm run build
+# 1) 后端打包（构建时会把 skill/、data/ 一并打进 jar）
+mvn clean package -DskipTests
+# 产物：target/personal-knowledge-agent-0.0.1-SNAPSHOT.jar
+#   BOOT-INF/classes/skill/SKILL.md、skill/references/*.md
+#   BOOT-INF/classes/data/wiki/*.md、data/raw-notes/*.md
 
-# Nginx 配置
-# 将 frontend/dist 部署到 Nginx
-# 配置反向代理：/chat、/admin 指向后端服务
+# 2) 上传 jar 到服务器（示例 /usr/local/ai-project）——空目录也可以
+scp target/personal-knowledge-agent-0.0.1-SNAPSHOT.jar root@你的服务器:/usr/local/ai-project/
+
+# 3) 配置 API Key（三选一，jar 内不含密钥）
+export SPRING_AI_OPENAI_API_KEY=sk-你的key                   # 方式一：环境变量（推荐）
+# java -jar xxx.jar --spring.ai.openai.api-key=sk-你的key    # 方式二：启动参数
+# 或在 jar 同目录创建 application-secret.yml（见"快速开始"）  # 方式三：外部密钥文件
+
+# 4) 确保 Embedding 服务可达（默认要求服务器本地有 Ollama）
+ollama serve
+ollama pull nomic-embed-text
+# 若 Embedding 不在本机，请改 spring.ai.openai.embedding.base-url 指向可达地址
+
+# 5) 启动（无需准备 skill/、data/ 目录）
+cd /usr/local/ai-project
+java -jar personal-knowledge-agent-0.0.1-SNAPSHOT.jar
+
+# 6) 前端打包 + Nginx
+cd frontend && npm run build   # 将 dist 交给 Nginx，反向代理 /chat、/admin 到后端
 ```
+
+#### 内置资源与外部覆盖
+
+读取顺序是「工作目录文件系统优先，读不到再回退到 jar 内置资源」：
+
+| 资源 | 目录 | 说明 |
+| :--- | :--- | :--- |
+| 个人 Skill | `skill/` | 存在该目录则用它，否则用 jar 内 `skill/`；`POST /admin/skill/reload` 可热重载 |
+| 编译后 Wiki | `data/wiki/` | RAG 检索来源，缺失时用 jar 内置版本 |
+| 原始笔记 | `data/raw-notes/` | 仅在服务器上执行 `POST /admin/compile` 时需要 |
+
+因此想替换知识内容时，**不必重新打包**：在 jar 同目录放一份 `skill/` 或 `data/wiki/`
+即可覆盖内置版本。
 
 ## 接口说明
 

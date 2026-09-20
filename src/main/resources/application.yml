@@ -5,7 +5,12 @@ spring:
     name: personal-knowledge-agent
   ai:
     openai:
-      # Chat：DeepSeek（OpenAI 兼容接口，api-key 见 application-secret.yml）
+      # Chat：DeepSeek（OpenAI 兼容接口）
+      # api-key 来源（任选其一，优先级从高到低）：
+      #   1) 环境变量 SPRING_AI_OPENAI_API_KEY=sk-xxx
+      #   2) 启动参数 --spring.ai.openai.api-key=sk-xxx
+      #   3) 外部文件 ./application-secret.yml（见上方 spring.config.import；
+      #      注意：该文件不会打进 jar，服务器上需手动放置）
       base-url: https://api.deepseek.com
       chat:
         options:

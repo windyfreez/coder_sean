@@ -3,9 +3,6 @@ target/
 .mvn-local.xml
 .npm-cache/
 application-secret.yml
-data/persona/
-data/raw-notes/
-data/wiki/
 frontend/node_modules/
 frontend/dist/
 .idea/
