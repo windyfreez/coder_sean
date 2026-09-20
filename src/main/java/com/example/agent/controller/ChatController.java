@@ -16,20 +16,22 @@ public class ChatController {
         this.chatService = chatService;
     }
 
-    // ===== 流式输出（SSE，当前使用）=====
-    // conversationId：多轮上下文记忆的会话键；mode：think=深度思考，其它=快速回答
+    /**
+     * 流式对话
+     * conversationId：多轮上下文记忆的会话键；mode：think=深度思考，其它=快速回答
+     * @param request
+     * @return
+     */
     @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<String> chat(@RequestBody ChatRequest request) {
         return chatService.chat(request.message(), request.conversationId(), request.mode());
     }
 
-    // ===== 整体输出（保留备用）=====
-    // @PostMapping("/chat")
-    // public String chat(@RequestBody ChatRequest request) {
-    //     return chatService.chat(request.message(), request.conversationId(), request.mode());
-    // }
-
-    /** 由 AI 概括会话内容生成短标题（前端侧边栏展示）。 */
+    /**
+     * 由 AI 概括会话内容生成短标题（前端侧边栏展示）。
+     * @param request
+     * @return
+     */
     @PostMapping("/chat/title")
     public TitleResponse title(@RequestBody TitleRequest request) {
         return new TitleResponse(chatService.generateTitle(request.text()));

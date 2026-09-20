@@ -21,13 +21,17 @@ public class AdminController {
         this.chatService = chatService;
     }
 
-    /** 编译个人 Wiki（data/raw-notes → data/wiki）。 */
+    /**
+     * 编译个人 Wiki（data/raw-notes → data/wiki）
+     */
     @PostMapping("/compile")
     public CompileKnowledgeService.CompileResult compile() {
         return compileKnowledgeService.compileWiki();
     }
 
-    /** 热重载个人 Skill（重新读取 skill/ 下的 md 并重建系统提示，无需重启）。 */
+    /**
+     * 热重载个人 Skill（重新读取 skill/ 下的 md 并重建系统提示，无需重启）
+     */
     @PostMapping("/skill/reload")
     public ChatService.SkillReloadResult reloadSkill() {
         return chatService.reloadSkill();
