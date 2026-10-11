@@ -20,6 +20,8 @@
     <properties>
         <java.version>17</java.version>
         <spring-ai.version>1.0.0</spring-ai.version>
+        <!-- 本地 ONNX 向量模型（langchain4j-embeddings 与模型载体包同一版本） -->
+        <langchain4j.version>1.0.0-beta5</langchain4j.version>
     </properties>
 
     <dependencyManagement>
@@ -52,6 +54,61 @@
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
+
+        <!--
+            本地 Embedding（完全离线，不需要 Ollama / 任何外部向量服务）：
+              - langchain4j-embeddings 提供 ONNX 推理 + tokenizer，并在进程内做池化；
+              - 它只依赖 onnxruntime 与 djl-huggingface-tokenizers（原生库都在 jar 内），
+                不像 spring-ai-transformers 那样带上 pytorch-engine（会在运行时去 djl.ai 下载原生库）。
+        -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-embeddings</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <!--
+            仅作为「中文向量模型文件」的载体：该 jar 根目录内含
+              bge-small-zh-v1.5-q.onnx（量化版，约 24MB）
+              bge-small-zh-v1.5-q-tokenizer.json
+            代码不引用其中的类，只按 classpath 资源读取这两个文件（见 EmbeddingConfig）。
+            模型来源：BAAI/bge-small-zh-v1.5（MIT），ONNX 导出来自 Xenova/bge-small-zh-v1.5。
+        -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-embeddings-bge-small-zh-v15-q</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!--
+            ⚠️ 下面两个原生库必须锁版本，否则 CentOS 7 上直接起不来（实测数据）：
+
+              onnxruntime 1.16.3  需要的最高符号：glibc 2.16 / GLIBCXX_3.4.19
+              onnxruntime 1.17+   需要 glibc 2.27 —— CentOS 7 只有 2.17，报
+                                  "version `GLIBC_2.27' not found"
+
+              tokenizers   0.28.0 需要的最高符号：glibc 2.16
+              tokenizers   0.30+  需要 glibc 2.25 —— CentOS 7 同样不满足
+
+            langchain4j-embeddings 默认拉的是 1.20.0 / 0.31.1，这里按 Maven「就近原则」
+            显式声明直接依赖把它们压回去。Java API 完全兼容：
+            OrtEnvironment.createSession(byte[], SessionOptions)、
+            HuggingFaceTokenizer.newInstance(InputStream, Map) 在旧版本里都已存在。
+        -->
+        <dependency>
+            <groupId>com.microsoft.onnxruntime</groupId>
+            <artifactId>onnxruntime</artifactId>
+            <version>1.16.3</version>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl</groupId>
+            <artifactId>api</artifactId>
+            <version>0.28.0</version>
+        </dependency>
+        <dependency>
+            <groupId>ai.djl.huggingface</groupId>
+            <artifactId>tokenizers</artifactId>
+            <version>0.28.0</version>
         </dependency>
 
         <!-- RAG: 向量存储 + 检索增强 Advisor（版本由 spring-ai-bom 管理） -->
@@ -104,6 +161,11 @@
             <resource>
                 <directory>data</directory>
                 <targetPath>data</targetPath>
+                <!-- onnx/ 是本地模型覆盖位、vectorstore/ 另有内置副本，都不再打包一份 -->
+                <excludes>
+                    <exclude>onnx/**</exclude>
+                    <exclude>vectorstore/**</exclude>
+                </excludes>
             </resource>
         </resources>
 

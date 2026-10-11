@@ -8,7 +8,8 @@
   <img src="https://img.shields.io/badge/Spring%20AI-1.0.0-6DB33F.svg?style=flat-square&logo=spring">
   <img src="https://img.shields.io/badge/DeepSeek-LLM-4B6BFB.svg?style=flat-square">
   <img src="https://img.shields.io/badge/RAG-Vector%20Store-blueviolet.svg?style=flat-square">
-  <img src="https://img.shields.io/badge/Ollama-Embedding-black.svg?style=flat-square&logo=ollama">
+  <img src="https://img.shields.io/badge/Embedding-ONNX%20bge--small--zh-1F6FEB.svg?style=flat-square">
+  <img src="https://img.shields.io/badge/Deploy-Single%20Jar-orange.svg?style=flat-square">
   <img src="https://img.shields.io/badge/Vue.js-3.x-4FC08D.svg?style=flat-square&logo=vuedotjs">
 
   <div style="margin-top: 10px;">
@@ -31,7 +32,7 @@
 
 Coder Sean 个人知识库智能体，是一个面向**个人知识管理 + 个性化对话**的 AI 应用。它将零散的原始笔记（`data/raw-notes`）借助大模型**编译**成带元数据的 Wiki（`data/wiki`），再对 Wiki 进行**切块、向量化**写入向量库；对话时通过 **RAG 检索增强**把相关知识注入上下文，并加载一套**个人 Skill（人设 / 语气 / 知识边界）**，让回答既"知道"又"像本人"。
 
-后端采用 **Spring Boot 3.4 + Spring AI 1.0** 编排大模型能力，对话模型接入 **DeepSeek**（OpenAI 兼容协议），向量化使用本地 **Ollama（nomic-embed-text）**，向量存储使用 **SimpleVectorStore**（内存级，便于本地开发测试）。对话链路实现了 **SSE 流式输出、多轮上下文记忆、双模型模式（快速回答 / 深度思考）** 以及 **AI 自动生成会话标题**。前端使用 **Vue 3 + Vite + Pinia** 复刻 DeepSeek 网页版的交互形态：流式打字机输出、Markdown 渲染、深浅色主题切换、对话历史侧边栏。
+后端采用 **Spring Boot 3.4 + Spring AI 1.0** 编排大模型能力，对话模型接入 **DeepSeek**（OpenAI 兼容协议），向量化使用**打包进 jar 的本地 ONNX 中文向量模型（bge-small-zh-v1.5，onnxruntime 进程内推理）**，向量存储使用 **SimpleVectorStore**（内存级）。整个检索链路**不依赖任何外部向量服务**：模型文件、编译后的 Wiki、预生成的向量库、个人 Skill 全部内置在 jar 中，`java -jar` 即可在"什么都没有"的服务器上跑起来。对话链路实现了 **SSE 流式输出、多轮上下文记忆、双模型模式（快速回答 / 深度思考）** 以及 **AI 自动生成会话标题**。前端使用 **Vue 3 + Vite + Pinia** 复刻 DeepSeek 网页版的交互形态：流式打字机输出、Markdown 渲染、深浅色主题切换、对话历史侧边栏。
 
 ## 功能特性
 - 💬 **对话模块**：SSE 流式对话、打字机输出、多轮上下文记忆（按会话隔离）、AI 自动生成会话标题
@@ -41,17 +42,22 @@ Coder Sean 个人知识库智能体，是一个面向**个人知识管理 + 个�
 - 🎭 **个人 Skill**：由 `SKILL.md + references/identity|voice|knowledge-source.md` 组成的个人人设包，启动时加载进系统提示，支持 `POST /admin/skill/reload` **热重载**
 - 🧠 **对话记忆**：基于 Spring AI `ChatMemory` + `MessageChatMemoryAdvisor`，按 `conversationId` 维护多轮上下文
 - 🎨 **前端体验**：DeepSeek 风格界面、流式打字机、Markdown 渲染（含格式自动纠偏）、深浅色主题、对话历史侧边栏
-- 🔐 **配置与安全**：API Key 通过独立 `application-secret.yml` 注入并加入 `.gitignore`；个人资料与笔记目录不入库
+- 🔐 **配置与安全**：API Key 支持「环境变量 / 启动参数 / 外部 `application-secret.yml` / 打包进 jar」四种来源，优先级从高到低，密钥文件已加入 `.gitignore`
+- 📦 **零依赖部署**：`skill`、`data`、预生成的向量库、ONNX 向量模型、API Key 全部可打进 jar，服务器空目录 `java -jar` 即可运行（详见「部署说明」）
 
 ## 项目结构
-- `src/main/java/.../config`：Spring AI 与向量库配置（`ChatClient`、`SimpleVectorStore`、`QuestionAnswerAdvisor` 及自定义 QA 模板）
+- `src/main/java/.../config`：Spring AI 与向量库配置（`ChatClient`、`SimpleVectorStore`、`QuestionAnswerAdvisor` 及自定义 QA 模板、本地 ONNX 向量模型 `EmbeddingConfig`）
 - `src/main/java/.../service`：核心业务逻辑（对话编排、知识库编译、个人 Skill 加载与热重载）
 - `src/main/java/.../controller`：对外 REST API（`/chat`、`/chat/title`、`/admin/*`）
-- `src/main/java/.../vector`：文档读取、切块与索引初始化
+- `src/main/java/.../vector`：文档读取、切块、向量库装配（内置向量加载 / 重建）与本地 ONNX 嵌入适配
 - `src/main/java/.../tool`：自定义工具（预留个人 Skill 调用的扩展位）
 - `skill`：个人 Skill 包（`SKILL.md` + `references/`）
 - `data/raw-notes`：原始 Markdown 笔记（**不入库**）；`data/wiki`：编译后的 Wiki（**不入库**）
+- `data/vectorstore`：本地向量库文件（`POST /admin/reindex` 生成，**不入库**）；`data/onnx`：可选的本地向量模型覆盖位（**不入库**）
+- `src/main/resources/vectorstore/vectorstore.json`：打包进 jar 的内置向量库
+- `src/main/resources/application-secret.yml`：打包进 jar 的 API Key（**已被 `.gitignore` 忽略**）
 - `frontend`：Vue 3 + Vite 前端工程
+- `deploy`：部署相关配置（`deploy/nginx.conf`：静态托管 + SSE 反向代理）
 
 ## 项目文档
 - 个人 Skill 使用说明：[`skill/SKILL.md`](./skill/SKILL.md)
@@ -73,7 +79,7 @@ Coder Sean 个人知识库智能体，是一个面向**个人知识管理 + 个�
 | Spring Boot | 后端核心业务逻辑与 RESTful API | https://spring.io/projects/spring-boot |
 | Spring AI | 大模型能力统一编排：ChatClient、Advisor、ChatMemory、Structured Output | https://docs.spring.io/spring-ai/reference/ |
 | DeepSeek API | 对话模型（OpenAI 兼容协议接入），含 `deepseek-chat` / `deepseek-reasoner` | https://platform.deepseek.com |
-| Ollama | 本地 Embedding 服务（`nomic-embed-text`），负责文档与查询向量化 | https://ollama.com |
+| 本地 ONNX Embedding | 进程内向量化（`bge-small-zh-v1.5` 量化版 + onnxruntime + DJL tokenizer），不依赖任何外部向量服务 | https://huggingface.co/BAAI/bge-small-zh-v1.5 |
 | SimpleVectorStore | 内存级向量库，存放 Wiki 切块后的向量并做相似度检索 | https://docs.spring.io/spring-ai/reference/api/vectordbs.html |
 | QuestionAnswerAdvisor | RAG 检索增强 Advisor，负责"检索 + 上下文注入" | https://docs.spring.io/spring-ai/reference/api/retrieval-augmented-generation.html |
 | MessageChatMemoryAdvisor / ChatMemory | 多轮对话记忆（按会话隔离） | https://docs.spring.io/spring-ai/reference/api/chat-memory.html |
@@ -185,7 +191,7 @@ subgraph Model Service
 
 O3 --> M1[DeepSeek API<br/>chat / reasoner]
 
-V2 --> M2[Ollama Embedding<br/>nomic-embed-text]
+V2 --> M2[本地 ONNX Embedding<br/>bge-small-zh-v1.5（jar 内置模型）]
 
 end
 ```
@@ -198,7 +204,7 @@ flowchart LR
 RA[原始笔记<br/>Markdown] --> CP[LLM 编译<br/>生成元数据]
 CP --> WK[Wiki 文档<br/>front-matter + 正文]
 WK --> SP[切块<br/>TokenTextSplitter]
-SP --> EM[向量化<br/>Ollama Embedding]
+SP --> EM[向量化<br/>本地 ONNX 模型]
 EM --> VS[(向量库<br/>SimpleVectorStore)]
 
 Q[用户提问] --> QE[查询向量化]
@@ -226,7 +232,7 @@ LLM --> ANS[流式回答<br/>SSE 逐段输出]
 
 ### RAG 检索模块
 
-RAG 检索模块负责"在回答前先找到相关的知识"。应用启动时读取 `data/wiki`，使用 `TokenTextSplitter` 将长文档切分为若干语义块，逐块向量化后写入向量库；对话时把用户问题向量化并做相似度检索（TopK + 阈值），命中片段经**自定义 QA 提示模板**注入上下文。该模板覆盖了 Spring AI 默认"只能基于上下文作答"的僵硬策略，改为"相关就用、不相关就正常回答"，从而避免生硬地回复"知识库中没有"。
+RAG 检索模块负责"在回答前先找到相关的知识"。向量库的装配有三级来源：**① 工作目录的向量库文件**（存在即用，便于热替换）→ **② jar 内置向量库**（打包时预生成，部署即用、启动无需向量化）→ **③ 兜底现场计算**：读取 `data/wiki`，用 `TokenTextSplitter` 切块后逐块向量化。向量化由**进程内的 ONNX 中文模型**完成，不依赖任何外部服务。对话时把用户问题向量化并做相似度检索（TopK + 阈值），命中片段经**自定义 QA 提示模板**注入上下文。该模板覆盖了 Spring AI 默认"只能基于上下文作答"的僵硬策略，改为"相关就用、不相关就正常回答"，从而避免生硬地回复"知识库中没有"。
 
 ### 个人 Skill 模块
 
@@ -300,8 +306,7 @@ sequenceDiagram
 |     IDEA     |        Java 开发 IDE       |  https://www.jetbrains.com/idea/download   |
 |   WebStorm   |        前端开发 IDE        |  https://www.jetbrains.com/webstorm/       |
 |    Apifox    |     接口调试与文档工具     |  https://apifox.com/                       |
-|    Ollama    | 本地大模型 / Embedding 服务 |  https://ollama.com/download               |
-| DeepSeek 开放平台 | 对话模型 API Key 获取  |  https://platform.deepseek.com             |
+|  DeepSeek 开放平台 | 对话模型 API Key 获取  |  https://platform.deepseek.com             |
 
 ### 开发环境
 
@@ -310,7 +315,6 @@ sequenceDiagram
 |      JDK      |    17    | https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html |
 |     Maven     |  3.6.0+  |                   http://maven.apache.org/                   |
 |    Node.js    |   16+    |                   https://nodejs.org/                        |
-|    Ollama     |  最新版  |                   https://ollama.com/download                |
 | Spring Boot   |  3.4.x   |                   https://spring.io/projects/spring-boot     |
 |   Spring AI   |  1.0.0   |                   https://spring.io/projects/spring-ai       |
 
@@ -320,8 +324,12 @@ sequenceDiagram
 - JDK 17+
 - Maven 3.6.0+
 - Node.js 16+
-- Ollama（并已拉取 Embedding 模型）
 - DeepSeek API Key
+- Embedding 二选一（默认第一种）：
+  - **本地 ONNX（默认）**：中文向量模型（bge-small-zh-v1.5 量化版）随依赖打进 jar，进程内推理，
+    不需要 Ollama、不需要联网向量化；要求系统 glibc ≥ 2.17（CentOS 7 满足，详见「服务器环境注意」）
+  - **云端 Embedding**：任何 OpenAI 兼容的 Embedding 服务（如硅基流动 `BAAI/bge-m3`），
+    需要额外一个 key，适合不想带原生库或系统太老的场景
 
 ### 后端启动
 
@@ -332,17 +340,19 @@ git clone https://github.com/windyfreez/PersonalKnowledgeAgent.git
 # 进入项目目录
 cd PersonalKnowledgeAgent
 
-# 1) 启动本地 Embedding 服务并拉取模型
-ollama serve
-ollama pull nomic-embed-text
-
-# 2) 配置密钥：在项目根目录新建 application-secret.yml（该文件已被 .gitignore 忽略）
+# 1) 配置密钥（四选一，优先级从高到低，详见「配置说明」）
+#    a. 环境变量 SPRING_AI_OPENAI_API_KEY=sk-xxx
+#    b. 启动参数 --spring.ai.openai.api-key=sk-xxx
+#    c. 工作目录的 application-secret.yml
+#    d. src/main/resources/application-secret.yml（会被打进 jar，实现零配置部署）
 # spring:
 #   ai:
 #     openai:
 #       api-key: sk-你的DeepSeek密钥
 
-# 3) 启动后端
+# 2) 启动后端
+#    首次启动若没有可用向量库，会用内置 ONNX 模型现场算向量（约 20~30 秒）；
+#    存在内置/本地向量库时直接加载，启动只要几秒
 mvn spring-boot:run
 ```
 
@@ -354,7 +364,11 @@ mvn spring-boot:run
 # 2) 编译成 Wiki（生成摘要/关键词/关联笔记）
 # POST http://localhost:8080/admin/compile
 
-# 3) 重启后端，启动时自动切块 + 向量化（日志可见向量化进度）
+# 3) 重新切块 + 向量化，并落盘到 data/vectorstore/vectorstore.json
+# POST http://localhost:8080/admin/reindex
+
+# 4) 想让新知识随 jar 一起分发：把上面生成的文件复制到
+#    src/main/resources/vectorstore/vectorstore.json，再重新打包即可
 ```
 
 ### 前端启动
@@ -376,53 +390,98 @@ npm run dev
 | :--- | :--- |
 | 前端 | http://localhost:5173 |
 | 后端 API | http://localhost:8080 |
-| Ollama | http://localhost:11434 |
 
 ### 部署说明（服务器 / jar）
 
-`skill/` 与 `data/` 会在打包时作为资源写入 jar，**服务器上不需要任何额外目录**，
-上传一个 jar 即可运行。
+**一个 jar 就是全部**。构建时会把下列内容作为 classpath 内置资源写进 jar，
+服务器上不需要任何额外目录，**也不需要安装 Ollama 或任何外部向量服务**：
+
+| 打包进 jar 的内容 | 位置 |
+| :--- | :--- |
+| 个人 Skill 包 | `BOOT-INF/classes/skill/` |
+| 编译后的 Wiki | `BOOT-INF/classes/data/wiki/` |
+| 原始笔记 | `BOOT-INF/classes/data/raw-notes/` |
+| 预生成的向量库 | `BOOT-INF/classes/vectorstore/vectorstore.json` |
+| API Key | `BOOT-INF/classes/application-secret.yml` |
+| 中文向量模型 | 由依赖 jar 提供（`bge-small-zh-v1.5-q.onnx`，启动时自动解压到临时目录） |
 
 ```bash
-# 1) 后端打包（构建时会把 skill/、data/ 一并打进 jar）
+# 1) 后端打包（产物约 152MB：onnxruntime 原生库 + 向量模型 + 内置向量库 + Spring 全家桶）
 mvn clean package -DskipTests
 # 产物：target/personal-knowledge-agent-0.0.1-SNAPSHOT.jar
-#   BOOT-INF/classes/skill/SKILL.md、skill/references/*.md
-#   BOOT-INF/classes/data/wiki/*.md、data/raw-notes/*.md
 
-# 2) 上传 jar 到服务器（示例 /usr/local/ai-project）——空目录也可以
+# 2) 上传到服务器（示例 /usr/local/ai-project）——空目录也可以
 scp target/personal-knowledge-agent-0.0.1-SNAPSHOT.jar root@你的服务器:/usr/local/ai-project/
 
-# 3) 配置 API Key（三选一，jar 内不含密钥）
-export SPRING_AI_OPENAI_API_KEY=sk-你的key                   # 方式一：环境变量（推荐）
-# java -jar xxx.jar --spring.ai.openai.api-key=sk-你的key    # 方式二：启动参数
-# 或在 jar 同目录创建 application-secret.yml（见"快速开始"）  # 方式三：外部密钥文件
-
-# 4) 确保 Embedding 服务可达（默认要求服务器本地有 Ollama）
-ollama serve
-ollama pull nomic-embed-text
-# 若 Embedding 不在本机，请改 spring.ai.openai.embedding.base-url 指向可达地址
-
-# 5) 启动（无需准备 skill/、data/ 目录）
+# 3) 直接启动即可（密钥已在 jar 内，无需任何环境变量）
 cd /usr/local/ai-project
-java -jar personal-knowledge-agent-0.0.1-SNAPSHOT.jar
+java -jar personal-knowledge-agent-0.0.1-SNAPSHOT.jar --server.port=8080
+# 如果启动报 "GLIBC_2.2x not found"，说明原生库与系统不匹配，切云端 Embedding 即可：
+# java -jar personal-knowledge-agent-0.0.1-SNAPSHOT.jar --server.port=8080 \
+#   --knowledge.embedding.provider=openai \
+#   --knowledge.embedding.api-key=sk-你的Embedding密钥 \
+#   --knowledge.embedding.base-url=https://api.siliconflow.cn \
+#   --knowledge.embedding.model=BAAI/bge-m3
 
-# 6) 前端打包 + Nginx
-cd frontend && npm run build   # 将 dist 交给 Nginx，反向代理 /chat、/admin 到后端
+# 4) 自检：确认 skill、向量库、Embedding 提供方与维度都正常
+curl http://localhost:8080/admin/status
+
+# 5) 前端打包 + Nginx
+cd frontend && npm run build                       # 产出 frontend/dist
+cp -r frontend/dist /usr/local/ai-project/dist
+# Nginx 配置见 deploy/nginx.conf（已处理好 SSE 不缓冲与慢接口超时），
+# 拷到服务器后 nginx -t && systemctl reload nginx
+```
+
+启动日志里出现下面两行，说明已经完全离线自洽：
+
+```
+本地向量模型就绪：bge-small-zh-v1.5-q.onnx（512 维，CLS 池化，无需任何外部向量服务）
+已加载向量库（classpath:/vectorstore/vectorstore.json）：140 条向量，跳过启动时向量化
 ```
 
 #### 内置资源与外部覆盖
 
-读取顺序是「工作目录文件系统优先，读不到再回退到 jar 内置资源」：
+读取顺序是「工作目录文件系统优先，读不到再回退到 jar 内置资源」，所以想替换内容**不必重新打包**，
+在 jar 同目录放一份同名文件/目录即可覆盖：
 
-| 资源 | 目录 | 说明 |
+| 资源 | 工作目录位置 | 说明 |
 | :--- | :--- | :--- |
-| 个人 Skill | `skill/` | 存在该目录则用它，否则用 jar 内 `skill/`；`POST /admin/skill/reload` 可热重载 |
-| 编译后 Wiki | `data/wiki/` | RAG 检索来源，缺失时用 jar 内置版本 |
+| 个人 Skill | `skill/` | 存在则用工作目录版本；`POST /admin/skill/reload` 可热重载 |
+| 编译后 Wiki | `data/wiki/` | 现场向量化时的数据来源，缺失时用 jar 内置版本 |
 | 原始笔记 | `data/raw-notes/` | 仅在服务器上执行 `POST /admin/compile` 时需要 |
+| 向量库 | `data/vectorstore/vectorstore.json` | 存在则直接加载，覆盖 jar 内置向量库 |
+| 向量模型 | `data/onnx/bge-small-zh-v1.5-q.onnx` 与 `...-tokenizer.json` | 想换更强的向量模型时放这里，无需改代码重新打包 |
 
-因此想替换知识内容时，**不必重新打包**：在 jar 同目录放一份 `skill/` 或 `data/wiki/`
-即可覆盖内置版本。
+#### 密钥的四种来源
+
+优先级从高到低，后者只在前面的都没配时生效：
+
+```bash
+export SPRING_AI_OPENAI_API_KEY=sk-你的key                  # 1) 环境变量（临时覆盖最方便）
+java -jar xxx.jar --spring.ai.openai.api-key=sk-你的key     # 2) 启动参数
+# 3) 工作目录 ./application-secret.yml                      # 3) 外部密钥文件
+# 4) jar 内置 classpath:/application-secret.yml             # 4) 打包时的默认值
+```
+
+> ⚠️ 把密钥打进 jar，意味着**任何拿到这个 jar 的人都拿到了密钥**，别把带密钥的 jar 传到公开仓库或发给别人。
+> 想只在本地保留密钥时，不要创建 `src/main/resources/application-secret.yml` 即可（该文件已被 `.gitignore` 忽略）。
+
+#### 服务器环境注意
+
+- **原生库与系统版本（重要）**：本地 ONNX 方案依赖两个原生库，**必须锁在老版本**才能跑在 CentOS 7 上，
+  `pom.xml` 里已经显式声明压回旧版（langchain4j 默认拉的是新版，会在 CentOS 7 上直接启动失败）：
+
+  | 原生库 | 本项目锁定版本 | 需要的最高符号 | 新版会怎样 |
+  | :--- | :--- | :--- | :--- |
+  | `com.microsoft.onnxruntime:onnxruntime` | **1.16.3** | glibc 2.16 / GLIBCXX_3.4.19 | 1.17+ 需要 glibc 2.27，报 `GLIBC_2.27 not found` |
+  | `ai.djl.huggingface:tokenizers` | **0.28.0** | glibc 2.16 | 0.30+ 需要 glibc 2.25，同样不满足 |
+
+  也就是说 **CentOS 7（glibc 2.17 / GLIBCXX_3.4.19）可以用本地 ONNX 方案**。
+  若哪天升级依赖又踩到 `GLIBC_2.2x not found`，改回上面两个版本即可，或直接切云端 Embedding。
+- **内存**：模型与向量库都在内存中，140 条向量只占几 MB，1GB 内存的机器足够。
+- **外网**：`provider=onnx` 时只有对话需要访问 `https://api.deepseek.com`，检索与向量化完全离线；
+  `provider=openai` 时向量化也需要外网。
 
 ## 接口说明
 
@@ -432,18 +491,49 @@ cd frontend && npm run build   # 将 dist 交给 Nginx，反向代理 /chat、/a
 | POST | `/chat/title` | 由 AI 概括会话内容生成短标题 | `{ "text": "首轮对话内容" }` |
 | POST | `/admin/compile` | 编译知识库（`data/raw-notes` → `data/wiki`） | 无 |
 | POST | `/admin/skill/reload` | 热重载个人 Skill（重新读取 `skill/` 并重建系统提示） | 无 |
+| POST | `/admin/reindex` | 重新切块 + 向量化，并落盘到 `knowledge.vector-store-file` | 无 |
+| GET | `/admin/status` | 运行自检：skill 文件、系统提示长度、向量库来源/条数、向量维度 | 无 |
+| GET | `/admin/search` | 检索自检：只看向量库命中了哪些片段，不消耗大模型额度 | Query：`q`、`topK`（默认 3） |
 
 ## 配置说明
 
 | 配置项 | 说明 | 默认值 |
 | :--- | :--- | :--- |
-| `spring.ai.openai.base-url` | DeepSeek OpenAI 兼容地址 | `https://api.deepseek.com` |
-| `spring.ai.openai.embedding.base-url` | Embedding 服务地址（Ollama） | `http://localhost:11434` |
+| `spring.ai.openai.base-url` | DeepSeek OpenAI 兼容地址（对话） | `https://api.deepseek.com` |
+| `spring.ai.model.embedding` | Embedding 自动装配开关；由 `knowledge.embedding.provider` 单点驱动，不要手改 | `${knowledge.embedding.provider}` |
 | `chat.quick-model` | 快速回答模式模型 | `deepseek-chat` |
 | `chat.think-model` | 深度思考模式模型 | `deepseek-reasoner` |
 | `knowledge.raw-notes-dir` | 原始笔记目录 | `data/raw-notes` |
 | `knowledge.wiki-dir` | 编译后 Wiki 目录 | `data/wiki` |
 | `knowledge.skill-dir` | 个人 Skill 目录 | `skill` |
+| `knowledge.vector-store-file` | 向量库文件（存在即加载，优先于 jar 内置向量库） | `data/vectorstore/vectorstore.json` |
+| **`knowledge.embedding.provider`** | **Embedding 提供方：`onnx`（本地离线）/ `openai`（云端 OpenAI 兼容）** | `onnx` |
+| `knowledge.embedding.base-url` | 仅 `openai` 时生效：Embedding 服务地址 | `https://api.siliconflow.cn` |
+| `knowledge.embedding.api-key` | 仅 `openai` 时生效：Embedding 密钥（建议放 `application-secret.yml`） | 空 |
+| `knowledge.embedding.model` | 仅 `openai` 时生效：Embedding 模型名 | `BAAI/bge-m3` |
+| `knowledge.embedding.dir` | 仅 `onnx` 时生效：本地向量模型目录（放模型文件即覆盖 jar 内置模型） | `data/onnx` |
+| `knowledge.embedding.cache-dir` | 仅 `onnx` 时生效：内置模型解压缓存目录 | `${java.io.tmpdir}/personal-knowledge-agent/onnx` |
+
+### Embedding 双提供方
+
+`knowledge.embedding.provider` 一个开关同时驱动 `spring.ai.model.embedding` 与自身的 Bean 装配，
+所以切换时**只改这一个配置**：
+
+```bash
+# A) 本地 ONNX（默认，完全离线，进程内推理）
+java -jar personal-knowledge-agent-0.0.1-SNAPSHOT.jar
+
+# B) 云端 OpenAI 兼容 Embedding（不想带原生库 / 系统太老时用）
+java -jar personal-knowledge-agent-0.0.1-SNAPSHOT.jar \
+  --knowledge.embedding.provider=openai \
+  --knowledge.embedding.base-url=https://api.siliconflow.cn \
+  --knowledge.embedding.api-key=sk-你的Embedding密钥 \
+  --knowledge.embedding.model=BAAI/bge-m3
+```
+
+> 换 Embedding 模型会改变向量维度。程序启动时会比对向量库维度与当前模型维度，
+> **不一致就自动丢弃旧向量库并重新向量化**，然后把结果缓存到 `knowledge.vector-store-file`，
+> 所以只有第一次启动需要重算，之后都是秒级加载。
 
 ## 贡献指南
 

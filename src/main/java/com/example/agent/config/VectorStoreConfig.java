@@ -10,16 +10,16 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 向量存储与 RAG Advisor 配置（仅声明 Bean，启动加载见 WikiIndexInitializer）。
+ * 向量存储与 RAG Advisor 配置（仅声明 Bean，向量数据装配见 VectorIndexService）。
  */
 @Configuration
 public class VectorStoreConfig {
 
     /**
-     * 内存级向量存储（每次启动重建）。
+     * 内存级向量存储；启动时由 VectorIndexService 填入内置向量数据或现场向量化。
      */
     @Bean
-    public VectorStore vectorStore(EmbeddingModel embeddingModel) {
+    public SimpleVectorStore vectorStore(EmbeddingModel embeddingModel) {
         return SimpleVectorStore.builder(embeddingModel).build();
     }
 

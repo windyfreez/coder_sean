@@ -3,6 +3,8 @@ target/
 .mvn-local.xml
 .npm-cache/
 application-secret.yml
+# 本地覆盖用的向量模型文件（约 24MB，默认用 jar 内置模型，无需入库）
+data/onnx/
 frontend/node_modules/
 frontend/dist/
 .idea/

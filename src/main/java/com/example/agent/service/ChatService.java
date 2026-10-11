@@ -93,6 +93,16 @@ public class ChatService {
         return new SkillReloadResult(loadedSkillFiles, systemPrompt.length());
     }
 
+    /** 当前加载到的 skill 文件列表（供 /admin/status 查询）。 */
+    public List<String> loadedSkillFiles() {
+        return loadedSkillFiles;
+    }
+
+    /** 当前系统提示字符数。 */
+    public int systemPromptChars() {
+        return systemPrompt.length();
+    }
+
     /**
      * 读取 skill 包（SKILL.md + references/*.md）并组装系统提示。
      * 优先工作目录 skill/（可本地编辑 + 热重载），读不到时回退 jar 内置资源。
